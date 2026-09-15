@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     model_revision: str | None = None
     model_dtype: str = "bfloat16"
     max_model_len: int = 4096
+    # Empirically-safe cap for a T4 with this model loaded -- a realistic
+    # desktop screenshot at the model's own default max_pixels OOMs a T4
+    # (docs/research.md section 13). Raise for a bigger GPU (COLAB_GPU).
+    max_image_pixels: int = 1_003_520
 
     # --- Colab ---
     colab_gpu: str = "T4"

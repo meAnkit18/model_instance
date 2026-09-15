@@ -38,6 +38,8 @@ services:
         value: bfloat16
       - key: MAX_MODEL_LEN
         value: "4096"
+      - key: MAX_IMAGE_PIXELS
+        value: "1003520"
       - key: COLAB_GPU
         value: T4
       - key: COLAB_SESSION_NAME

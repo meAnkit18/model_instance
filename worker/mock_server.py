@@ -37,6 +37,7 @@ engine = InferenceEngine(
     revision=settings.model_revision,
     dtype="float32",  # mock worker typically runs on CPU-only dev machines
     max_model_len=settings.max_model_len,
+    max_image_pixels=settings.max_image_pixels,
 )
 _status = "BOOTING"
 

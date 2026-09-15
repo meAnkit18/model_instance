@@ -8,3 +8,7 @@ data/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+
+# Experimental computer-use agent harness -- controls the real mouse/
+# keyboard, not part of the deployed inference backend, not for the repo.
+ai-agent/

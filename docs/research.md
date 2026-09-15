@@ -198,6 +198,23 @@ No new deploy-time bugs were introduced by this change beyond what's already doc
 
 ---
 
+## 13. A real screenshot OOMs a T4 at the model's own default resolution cap
+
+The synthetic 800×600 test image in section 12 worked and was taken as validation of the vision path generally. It wasn't representative: sending a **real** desktop screenshot (1920×1080) through the deployed service failed with `inference failed: expected output marker 'INFER_RESULT_JSON:' not found in exec output` — and the failure was invisible in Render's logs, because `worker_manager.py`'s inference-error handler only logged `str(exception)`, not the `stdout`/`stderr` the underlying `ColabError` actually carried (the startup-failure path already did this; the inference path didn't — now fixed).
+
+Reproduced directly against a fresh `colab exec` session (same discipline as every other bug in this document — never debugged only through the deployed HTTP stack) using the actual real screenshot that triggered it:
+
+```
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 6.91 GiB.
+GPU 0 has a total capacity of 14.56 GiB of which 6.78 GiB is free.
+```
+
+Root cause: the processor's default `max_pixels` is `3,686,400` (~3.69MP), matching the model's claimed "native high-resolution up to 3840×2160" support — but that figure assumes a GPU with much more headroom than a T4 has left over *after* ~8GB is already spent on the model weights (~6.5GB free). A 1920×1080 screenshot (≈2.07MP) is well within that "supported" 3.69MP cap and barely gets touched by `smart_resize`, so the vision tower's attention blocks process something close to full resolution — and a single attention allocation for that needs 6.91GB, more than what's left.
+
+Fix: `InferenceEngine` now takes a `max_image_pixels` parameter (default `1,003,520`, ≈1MP), applied to `processor.image_processor.max_pixels` right after loading, threaded through `controller/config.py` (`MAX_IMAGE_PIXELS` env var) → `colab_driver.py`'s model config → `worker/bootstrap.py`. This value is not a guess — it's the smallest-tested cap that worked: the same real screenshot that OOM'd at the default cap loaded and answered correctly at this cap (resized to 1316×728, "This is a computer screen displaying a YouTube video with a presentation on finite automata, featuring a lecturer writing on a whiteboard." — an accurate description of what was actually on screen, not just a non-crashing response). Anyone deploying this on a GPU with more VRAM than a T4 (`COLAB_GPU=A100`, say) should raise `MAX_IMAGE_PIXELS` accordingly — this cap is a T4-specific resource constraint, not a property of the model.
+
+---
+
 ## 9. Phase 1 validation (live run, not simulated)
 
 This machine already had a cached, working `colab auth` token from earlier work in this repo, so Phase 1 was run for real against the live CLI (v0.6.0) rather than left as an untested script — see `phase1_poc/run_poc.py`. Actual output from a real run on 2026-09-15:

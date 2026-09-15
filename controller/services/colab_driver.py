@@ -59,6 +59,7 @@ class ColabWorkerDriver:
             "revision": settings.model_revision,
             "dtype": settings.model_dtype,
             "max_model_len": settings.max_model_len,
+            "max_image_pixels": settings.max_image_pixels,
         })
         escaped_literal = json.dumps(model_config_json)[1:-1]  # strip outer quotes
         script = _BOOTSTRAP_TEMPLATE.replace("__MODEL_CONFIG_JSON__", escaped_literal)

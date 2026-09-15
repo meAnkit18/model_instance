@@ -67,7 +67,16 @@ class WorkerManager:
             try:
                 result = await asyncio.to_thread(self.driver.infer, request)
             except Exception as e:
-                log_event("inference_error", detail=str(e)[:500])
+                # A real bug (docs/research.md section 13, a CUDA OOM on a
+                # realistic screenshot) was invisible in these logs until
+                # reproduced live via a separate colab exec session, purely
+                # because this branch dropped stdout/stderr that ColabError
+                # actually carries -- the startup path already logged them.
+                log_event(
+                    "inference_error", detail=str(e)[:500],
+                    stdout=getattr(e, "stdout", "")[-2000:],
+                    stderr=getattr(e, "stderr", "")[-2000:],
+                )
                 raise
             log_event("inference_completed", latency_seconds=round(time.monotonic() - t0, 2))
             return result

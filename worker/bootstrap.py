@@ -36,6 +36,7 @@ ENGINE = InferenceEngine(
     revision=_CONFIG.get("revision"),
     dtype=_CONFIG.get("dtype", "bfloat16"),
     max_model_len=_CONFIG.get("max_model_len", 4096),
+    max_image_pixels=_CONFIG.get("max_image_pixels", 1_003_520),
 )
 
 _t0 = time.monotonic()

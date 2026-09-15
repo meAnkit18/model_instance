@@ -33,11 +33,22 @@ from typing import Any
 
 class InferenceEngine:
     def __init__(self, model_id: str, revision: str | None = None,
-                 dtype: str = "bfloat16", max_model_len: int = 4096):
+                 dtype: str = "bfloat16", max_model_len: int = 4096,
+                 max_image_pixels: int = 1_003_520):
         self.model_id = model_id
         self.revision = revision
         self.dtype = dtype
         self.max_model_len = max_model_len
+        # The model's own default max_pixels (3,686,400 -- matching its
+        # claimed "native high-resolution up to 3840x2160" support) OOMs a
+        # T4 on any realistic desktop screenshot: with ~8GB already used by
+        # the model weights, only ~6.5GB is left, and the vision tower's
+        # attention blocks need ~6.9GB for a full 1920x1080 image alone
+        # (confirmed live -- docs/research.md section 13). This default is
+        # an empirically-verified-safe cap for a T4 (a real screenshot at
+        # this cap loaded and answered correctly); raise it via
+        # MAX_IMAGE_PIXELS if running on a bigger GPU.
+        self.max_image_pixels = max_image_pixels
         self._model = None
         self._processor = None
         self._device = "cpu"
@@ -52,6 +63,8 @@ class InferenceEngine:
         torch_dtype = getattr(torch, self.dtype, torch.bfloat16)
 
         self._processor = AutoProcessor.from_pretrained(self.model_id, revision=self.revision)
+        if hasattr(self._processor, "image_processor") and self.max_image_pixels:
+            self._processor.image_processor.max_pixels = self.max_image_pixels
         self._model = AutoModelForImageTextToText.from_pretrained(
             self.model_id,
             revision=self.revision,
