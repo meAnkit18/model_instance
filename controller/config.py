@@ -26,7 +26,13 @@ class Settings(BaseSettings):
     # --- Colab ---
     colab_gpu: str = "T4"
     colab_session_name: str = "inference-worker"
-    colab_config_dir: Path = Path.home() / ".config" / "colab-cli"
+    # The `colab` CLI resolves its token/session cache relative to $HOME
+    # (~/.config/colab-cli/, ~/.colab-cli-oauth-config.json) -- it does NOT
+    # read a COLAB_CONFIG_DIR-style env var (verified live; see
+    # docs/research.md section 11). ColabManager overrides HOME for the
+    # subprocess to this directory, so the Render Secret File (copied here
+    # by docker-entrypoint.sh) is actually where the CLI looks.
+    colab_home_dir: Path = Path.home()
     colab_bin: str = "colab"
 
     # --- Lifecycle timing ---

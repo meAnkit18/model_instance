@@ -42,8 +42,8 @@ services:
         value: T4
       - key: COLAB_SESSION_NAME
         value: inference-worker
-      - key: COLAB_CONFIG_DIR
-        value: /data/colab-cli
+      - key: COLAB_HOME_DIR
+        value: /data
       - key: STATE_FILE
         value: /data/controller_state.json
       - key: WORKER_IDLE_TIMEOUT_SECONDS

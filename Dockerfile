@@ -15,13 +15,16 @@ COPY requirements-worker.txt .
 COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh
 
-# COLAB_CONFIG_DIR must be writable (the CLI updates sessions.json on
-# every call) -- docker-entrypoint.sh copies the read-only Render Secret
-# File (/etc/secrets/token.json) here on boot. See docs/colab-auth.md.
-# Without an attached persistent disk this is ephemeral per-deploy, which
+# COLAB_HOME_DIR must be writable (the CLI updates sessions.json on every
+# call, and resolves its token cache relative to $HOME with no override
+# flag of its own -- docs/research.md section 11). docker-entrypoint.sh
+# copies the read-only Render Secret File (/etc/secrets/token.json) into
+# $COLAB_HOME_DIR/.config/colab-cli/ on boot; colab_manager.py sets HOME=
+# $COLAB_HOME_DIR for every CLI subprocess call. See docs/colab-auth.md.
+# Without an attached persistent disk this is ephemeral per deploy, which
 # is fine: the entrypoint re-copies the credential from /etc/secrets on
 # every boot regardless.
-ENV COLAB_CONFIG_DIR=/data/colab-cli
+ENV COLAB_HOME_DIR=/data
 ENV STATE_FILE=/data/controller_state.json
 ENV PYTHONUNBUFFERED=1
 

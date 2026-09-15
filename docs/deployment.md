@@ -35,10 +35,14 @@ in the dashboard (never in the repo):
 ### 3. Configure Colab authentication
 
 Dashboard → your service → **Environment → Secret Files**. Upload your
-local `~/.config/colab-cli/token.json` and `~/.config/colab-cli/settings.json`
-to `/data/colab-cli/token.json` and `/data/colab-cli/settings.json`
-(matching `COLAB_CONFIG_DIR=/data/colab-cli` from `render.yaml`). See
-`docs/colab-auth.md` for exactly why this step can't be automated.
+local `~/.config/colab-cli/token.json` (and `settings.json` if present) as
+secret files named exactly `token.json` / `settings.json` — Render always
+mounts these read-only at `/etc/secrets/<name>`, and `docker-entrypoint.sh`
+copies them into `$COLAB_HOME_DIR/.config/colab-cli/` (a writable path,
+`/data` by default) on every boot, since the CLI resolves its config
+relative to `$HOME` with no override flag of its own — see
+`docs/colab-auth.md` for why, and exactly why the auth step itself can't
+be automated.
 
 ### 4. Deploy
 
@@ -63,9 +67,14 @@ Colab connectivity yet.
 curl https://<your-service>.onrender.com/status
 ```
 
-Expect `worker.state: "OFFLINE"` on a fresh deploy. If this instead shows
-a `colab_cli_invoke`/auth-related `error_message`, step 3 didn't land
-correctly — re-check the secret file paths against `COLAB_CONFIG_DIR`.
+Expect `worker.state: "OFFLINE"` on a fresh deploy. If a later inference
+request fails with `startup_failed`/`colab new failed` and the logged
+`stdout` shows `Enter the authorization code:`, step 3 didn't land
+correctly — the CLI fell through to an interactive login prompt instead
+of finding the credential, almost always because the secret file didn't
+end up under `$COLAB_HOME_DIR/.config/colab-cli/` (check the entrypoint
+copied it, and that `COLAB_HOME_DIR` matches between the Dockerfile env
+and what `docker-entrypoint.sh` used).
 
 ### 7. Trigger the first inference
 

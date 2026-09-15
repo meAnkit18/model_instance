@@ -15,6 +15,7 @@ Output formats (verified live, docs/research.md section 9):
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -77,13 +78,19 @@ class ColabManager:
     def _run(self, args: list[str], timeout: float) -> subprocess.CompletedProcess:
         cmd = [self.colab_bin, *args]
         log_event("colab_cli_invoke", cmd=" ".join(cmd))
+        # HOME must be overridden here, not left to inherit (verified live
+        # -- docs/research.md section 11): the CLI resolves its token and
+        # session cache paths relative to $HOME with no other override
+        # mechanism, so this is what actually makes settings.colab_home_dir
+        # the credential location, not just documentation.
+        env = {**os.environ, "HOME": str(settings.colab_home_dir)}
         try:
             return subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env=None,  # inherit environment (PATH, HOME) -- no secrets injected here
+                env=env,
             )
         except subprocess.TimeoutExpired as e:
             raise ColabError(

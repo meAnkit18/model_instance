@@ -37,25 +37,42 @@ in this repo already excludes `.config/`, `*.token.json`, and `data/`).
 
 ## Getting the credential onto Render
 
-Render's controller needs `~/.config/colab-cli/` to exist inside the
-running container, pointed to by `COLAB_CONFIG_DIR` (see `.env.example`).
-Two supported ways to do this on Render, in order of preference:
+**Important, found by live testing, not just reasoning about it (see
+docs/research.md section 11): the `colab` CLI does not read a
+`COLAB_CONFIG_DIR`-style environment variable at all.** It resolves
+`~/.config/colab-cli/` and `~/.colab-cli-oauth-config.json` strictly
+relative to `$HOME`, with no CLI flag or env var to redirect that. The
+first deploy of this project got this wrong (invented a
+`COLAB_CONFIG_DIR` setting that the binary silently ignored, so it fell
+through to an interactive login prompt inside the container and failed).
+The fix: `colab_manager.py` overrides `HOME` itself for every CLI
+subprocess call, to `settings.colab_home_dir` — so what actually matters
+is getting your credential onto that directory's `.config/colab-cli/`
+subpath, not an arbitrarily-named config directory.
+
+Render's controller needs `$COLAB_HOME_DIR/.config/colab-cli/token.json`
+to exist inside the running container. Two supported ways to get it
+there, in order of preference:
 
 1. **Render Secret Files** (Dashboard → your service → Environment →
-   Secret Files): upload `token.json` and `settings.json` as secret files
-   mounted at `/data/colab-cli/token.json` and
-   `/data/colab-cli/settings.json`, and set `COLAB_CONFIG_DIR=/data/colab-cli`.
-   Simple, but a redeploy that changes secret files requires re-uploading.
-2. **Render persistent disk**: attach a disk at `/data`, `COLAB_CONFIG_DIR=/data/colab-cli`,
-   and copy your local `~/.config/colab-cli/` contents onto it once (e.g.
-   via `render ssh` or a one-off deploy hook). This also lets
-   `sessions.json` persist across restarts, which is what makes the
-   "rediscover a still-running Colab session after a Render restart"
-   behavior in `docs/architecture.md` actually work.
+   Secret Files): upload `token.json` (and `settings.json` if present) —
+   Render always mounts these read-only at `/etc/secrets/<name>`, never at
+   a path you choose. Since the CLI needs to *write* to its config dir
+   (`sessions.json` updates on every call), `docker-entrypoint.sh` copies
+   `/etc/secrets/token.json` into `$COLAB_HOME_DIR/.config/colab-cli/` on
+   every container boot. Set `COLAB_HOME_DIR` to a writable path (e.g.
+   `/data`) — see `Dockerfile`.
+2. **Render persistent disk**: attach a disk at `/data` (`COLAB_HOME_DIR=/data`)
+   so `sessions.json` also persists *across restarts*, not just across the
+   entrypoint's boot-time copy — this is what makes the "rediscover a
+   still-running Colab session after a Render restart" behavior in
+   `docs/architecture.md` actually work. Without a disk (e.g. Render's
+   free plan), the entrypoint still re-copies the credential from the
+   Secret File on every boot, so auth keeps working — you just lose the
+   session-rediscovery benefit.
 
 Either way, the `colab` binary must also be present in the container —
-handled by the `Dockerfile` (`RUN pip install google-colab-cli` or `uv tool
-install`).
+handled by the `Dockerfile` (`RUN pip install google-colab-cli`).
 
 ## Verifying it works
 
