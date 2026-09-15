@@ -158,6 +158,20 @@ See `docs/architecture.md` for the resulting system design.
 
 ---
 
+## 11. Live Render deployment: three more real bugs, and a hard account-level constraint
+
+Deploying to a real Render service (free plan, `srv-dakkvdnqj5pc73bie8a0`) and driving it with real HTTP requests — not just local testing — surfaced three more bugs, in order:
+
+1. **`COLAB_CONFIG_DIR` was never read by the CLI at all.** The controller invented this env var name assuming the CLI would honor it; it doesn't. The CLI resolves `~/.config/colab-cli/` and `~/.colab-cli-oauth-config.json` strictly relative to `$HOME`, with no override flag. Fixed by having `colab_manager.py` override `HOME` itself for every subprocess call (`settings.colab_home_dir`), and having `docker-entrypoint.sh` copy the Render Secret File into `$COLAB_HOME_DIR/.config/colab-cli/` to match. Verified locally against a real copied token before redeploying (not just reasoned about).
+2. **Unpinned `pip install google-colab-cli` resolved an incompatible `jupyter-kernel-client`.** The fresh Docker build got a newer `jupyter-kernel-client` than the one installed locally (0.8.0, verified working), breaking every `colab exec`/`colab install` call with `AttributeError: module 'jupyter_kernel_client' has no attribute 'KernelClient'`. This is a dependency-pinning gap in `google-colab-cli` itself (its own package metadata doesn't constrain this tightly enough) — not fixable upstream from here. Fixed by pinning both `google-colab-cli==0.6.0` and `jupyter-kernel-client==0.8.0` explicitly in the Dockerfile.
+3. **Cleanup after a failed startup only ran *between* retries, never after the final exhausted attempt.** A startup that fails on its last try left a real, partially-created GPU session running with nothing left to stop it — confirmed live: `colab sessions` showed an orphaned `T4` session that this sandbox's own CLI install couldn't stop by name, because session names are only resolvable by the same CLI-host process that created them (see finding below). Fixed in `worker_manager.py` by always calling `driver.stop()` after any failed attempt, not just ones followed by a retry.
+
+**A fourth issue is a real, hard account-level constraint, not a bug**: `colab new` started failing with `TooManyAssignmentsError` / HTTP 412 "Precondition Failed" once the orphaned session from bug #3 existed. **Free-tier Colab appears to allow only one concurrent GPU assignment per Google account.** Combined with the ephemeral, disk-less session cache on Render's free plan (a fresh container on every deploy starts with an *empty* `sessions.json`, since there's no persistent disk — see docs/architecture.md's free-tier tradeoffs note), this creates a real failure mode: **an orphaned session from one deploy's local cache is invisible to, and unstoppable by, a later deploy's local cache**, even though it's still occupying the account's one GPU slot and blocking every subsequent `colab new`. Bug #3's fix prevents new leaks going forward, but it cannot retroactively free a session that a *different* (already-replaced) container instance created and forgot. Recovery in that state requires either: a persistent disk so `sessions.json` survives across deploys (closing this gap — one more concrete reason to prefer a paid plan over free, beyond the idle-sleep issue already documented), or manually terminating the stray runtime from the Colab web UI (Tools/Runtime → Manage sessions) using the same Google account.
+
+This is exactly the kind of operational risk `docs/research.md` section 6 (policy risk) and the free-tier tradeoff note in `docs/architecture.md` flagged in the abstract before deployment; it's now a concrete, observed instance of it.
+
+---
+
 ## 9. Phase 1 validation (live run, not simulated)
 
 This machine already had a cached, working `colab auth` token from earlier work in this repo, so Phase 1 was run for real against the live CLI (v0.6.0) rather than left as an untested script — see `phase1_poc/run_poc.py`. Actual output from a real run on 2026-09-15:
