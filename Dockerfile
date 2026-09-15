@@ -12,14 +12,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY controller ./controller
 COPY worker ./worker
 COPY requirements-worker.txt .
+COPY docker-entrypoint.sh .
+RUN chmod +x docker-entrypoint.sh
 
-# COLAB_CONFIG_DIR should point at a mounted secret/disk path in production
-# -- see docs/colab-auth.md. This default is only used for WORKER_MODE=mock
-# local/dev images where no real Colab auth is needed.
+# COLAB_CONFIG_DIR must be writable (the CLI updates sessions.json on
+# every call) -- docker-entrypoint.sh copies the read-only Render Secret
+# File (/etc/secrets/token.json) here on boot. See docs/colab-auth.md.
+# Without an attached persistent disk this is ephemeral per-deploy, which
+# is fine: the entrypoint re-copies the credential from /etc/secrets on
+# every boot regardless.
 ENV COLAB_CONFIG_DIR=/data/colab-cli
 ENV STATE_FILE=/data/controller_state.json
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-CMD ["uvicorn", "controller.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

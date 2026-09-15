@@ -7,15 +7,28 @@ services:
   - type: web
     name: colab-inference-controller
     runtime: docker
-    plan: starter          # must NOT be a plan that scales to zero --
-                            # the Colab keep-alive daemon needs to keep
-                            # running (docs/research.md section 4)
+    plan: free              # NOTE: Render's free plan spins the service
+                            # down after ~15 min of HTTP inactivity. This
+                            # conflicts with the Colab keep-alive daemon
+                            # needing to run continuously, and means the
+                            # background lifecycle manager (idle-stopping
+                            # the Colab GPU) also pauses while Render is
+                            # asleep -- a stale GPU session can outlive its
+                            # configured WORKER_IDLE_TIMEOUT_SECONDS until
+                            # the next request wakes Render back up.
+                            # Accepted tradeoff for this deployment; switch
+                            # to `starter` (or higher) to close this gap --
+                            # see docs/research.md section 4 and
+                            # docs/deployment.md.
     autoDeploy: true
     healthCheckPath: /health
-    disk:
-      name: colab-cli-state
-      mountPath: /data
-      sizeGB: 1
+    # No persistent disk on the free plan -- COLAB_CONFIG_DIR is therefore
+    # ephemeral per deploy/restart. docker-entrypoint.sh re-copies the
+    # Colab credential from the (persistent) Secret File on every boot, so
+    # auth still works; only the `colab sessions` cache is lost on
+    # restart, meaning a still-running Colab GPU can't be rediscovered
+    # after a Render restart the way docs/research.md section 4 describes
+    # for the disk-backed case.
     envVars:
       - key: WORKER_MODE
         value: colab
