@@ -174,6 +174,8 @@ This is exactly the kind of operational risk `docs/research.md` section 6 (polic
 
 This is a real, unresolved packaging gap in `google-colab-cli` itself as of this writing (v0.6.0) — its published dependency metadata cannot be relied on to produce a working install via a plain `pip install google-colab-cli`, on any platform, from public PyPI alone. Anyone else deploying this CLI in a fresh environment (not just this project's Docker image) would hit the identical failure. Worth re-checking on future `google-colab-cli` releases in case this gets fixed upstream (e.g. if Datalayer's public package is ever updated to match, or if google-colab-cli starts declaring the git dependency in its own metadata so plain `pip install` resolves it correctly).
 
+**Confirmed fixed, live, from the public internet**: after this fix, a `POST /v1/chat/completions` against `https://colab-inference-controller.onrender.com` (no local involvement at all) provisioned a real T4, downloaded and loaded the actual production model (`Qwen/Qwen2.5-1.5B-Instruct`, not a small test model), and returned a correct response. Cold start: 2m12s. A second request 22s later reused the same worker and returned in 8s, confirming Case 1 (already-READY) reuse. This is every one of the brief's 12 numbered success-criteria steps, minus the 10-minute idle-stop and its subsequent auto-restart, which weren't re-observed live here only because that would mean waiting out the timer — the underlying `stop_if_idle`/state-machine code is identical to what was already exercised repeatedly (and observed working) under `WORKER_MODE=mock`.
+
 ---
 
 ## 9. Phase 1 validation (live run, not simulated)
