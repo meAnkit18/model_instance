@@ -1,0 +1,57 @@
+# Render Blueprint. See docs/deployment.md for the full walkthrough.
+# No secrets live in this file (per the brief) -- anything marked
+# `sync: false` must be set manually in the Render dashboard, and the
+# Colab OAuth token is uploaded as a Secret File, not an env var (it's a
+# JSON credential file, not a short string) -- see docs/colab-auth.md.
+services:
+  - type: web
+    name: colab-inference-controller
+    runtime: docker
+    plan: starter          # must NOT be a plan that scales to zero --
+                            # the Colab keep-alive daemon needs to keep
+                            # running (docs/research.md section 4)
+    autoDeploy: true
+    healthCheckPath: /health
+    disk:
+      name: colab-cli-state
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: WORKER_MODE
+        value: colab
+      - key: MODEL_ID
+        value: Qwen/Qwen2.5-1.5B-Instruct
+      - key: MODEL_DTYPE
+        value: bfloat16
+      - key: MAX_MODEL_LEN
+        value: "4096"
+      - key: COLAB_GPU
+        value: T4
+      - key: COLAB_SESSION_NAME
+        value: inference-worker
+      - key: COLAB_CONFIG_DIR
+        value: /data/colab-cli
+      - key: STATE_FILE
+        value: /data/controller_state.json
+      - key: WORKER_IDLE_TIMEOUT_SECONDS
+        value: "600"
+      - key: HEARTBEAT_INTERVAL_SECONDS
+        value: "30"
+      - key: HEARTBEAT_TIMEOUT_SECONDS
+        value: "90"
+      - key: STARTUP_TIMEOUT_SECONDS
+        value: "900"
+      - key: INFERENCE_TIMEOUT_SECONDS
+        value: "300"
+      - key: STARTUP_MAX_RETRIES
+        value: "3"
+      - key: STARTUP_RETRY_BACKOFF_SECONDS
+        value: "20"
+      - key: MAX_CONCURRENT_REQUESTS
+        value: "4"
+      - key: MAX_REQUEST_BODY_BYTES
+        value: "1000000"
+      - key: API_KEY
+        sync: false   # set manually in the dashboard -- a real random secret
+      - key: WORKER_REGISTRATION_SECRET
+        sync: false   # unused in WORKER_MODE=colab, but set if ever toggled to mock

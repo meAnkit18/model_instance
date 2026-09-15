@@ -1,0 +1,18 @@
+# Local dev convenience, WORKER_MODE=mock only -- WORKER_MODE=colab needs
+# your host's ~/.config/colab-cli/ (docs/colab-auth.md), which isn't wired
+# up here on purpose so this file never accidentally ships a credential
+# mount. Run controller + worker directly on the host for WORKER_MODE=colab.
+services:
+  controller:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      WORKER_MODE: mock
+      MODEL_ID: hf-internal-testing/tiny-random-gpt2
+      STATE_FILE: /data/controller_state.json
+    volumes:
+      - colab_data:/data
+
+volumes:
+  colab_data:

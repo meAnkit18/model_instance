@@ -1,0 +1,8 @@
+# Installed ON the Colab VM via `colab install -r requirements-worker.txt`
+# (Design A -- docs/architecture.md -- no HTTP server runs on the VM, so no
+# fastapi/uvicorn needed there). torch + CUDA are already present in the
+# stock Colab image (verified live, docs/research.md section 9) and are
+# deliberately NOT re-pinned here to avoid clobbering the preinstalled
+# CUDA-matched build with a plain PyPI wheel.
+transformers==4.47.1
+accelerate==1.2.1
