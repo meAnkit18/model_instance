@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     worker_mode: str = "mock"
 
     # --- Model (model-agnostic; swap without touching code) ---
-    model_id: str = "Qwen/Qwen2.5-1.5B-Instruct"
+    # Hcompany/Holo1.5-3B: a computer-use (GUI agent) vision-language model
+    # -- see docs/research.md section 12. Accepts image_url content parts
+    # (base64 data URIs) alongside text in /v1/chat/completions.
+    model_id: str = "Hcompany/Holo1.5-3B"
     model_revision: str | None = None
     model_dtype: str = "bfloat16"
     max_model_len: int = 4096
@@ -46,7 +49,10 @@ class Settings(BaseSettings):
 
     # --- Concurrency / request handling ---
     max_concurrent_requests: int = 4
-    max_request_body_bytes: int = 1_000_000
+    # A single base64-encoded screenshot (e.g. a 1920x1080 PNG) can easily
+    # exceed 1-2MB on its own -- the old 1MB default (fine for a text-only
+    # model) would reject a normal computer-use request outright.
+    max_request_body_bytes: int = 10_000_000
 
     # --- Security ---
     api_key: str | None = None  # required bearer token for public API, if set

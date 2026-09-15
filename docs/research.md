@@ -178,6 +178,26 @@ This is a real, unresolved packaging gap in `google-colab-cli` itself as of this
 
 ---
 
+## 12. Swapping in a real computer-use model: Hcompany/Holo1.5-3B
+
+The original target model (`Qwen/Qwen2.5-1.5B-Instruct`) was always meant as a placeholder to prove the pipeline, per the brief's phased approach. Per a later request, it was swapped for `Hcompany/Holo1.5-3B` — a genuine computer-use (GUI agent) model, fine-tuned from `Qwen/Qwen2.5-VL-3B-Instruct`, that takes a screenshot + instruction and outputs UI actions/coordinates rather than just chatting.
+
+**This is a real architecture change, not a config swap** — the old model was text-only (`AutoModelForCausalLM` + `AutoTokenizer`); this one is a vision-language model that needs image input. Researched directly from primary sources rather than assumed, same discipline as the rest of this project:
+
+- Confirmed via the model's raw `config.json` (not a summarized guess — an earlier WebFetch pass claimed the loading class was `AutoModelForMultimodalLM`, which does not exist in `transformers`; ignored in favor of checking `architectures` directly): `Qwen2_5_VLForConditionalGeneration`, loadable generically via `AutoModelForImageTextToText`.
+- Confirmed exact usage code from the model's own published cookbook notebook (`github.com/hcompai/hai-cookbook`) and its official Gradio Space's `app.py` (two independent primary sources, cross-checked against each other): `AutoModelForImageTextToText.from_pretrained(model_id, dtype=torch.bfloat16, device_map="auto")`, `AutoProcessor.from_pretrained(model_id)`, and — important — a mandatory `smart_resize` preprocessing step (`transformers.models.qwen2_vl.image_processing_qwen2_vl.smart_resize`) using the processor's own `patch_size`/`merge_size`/`min_pixels`/`max_pixels`. This isn't optional: the model's predicted coordinates are relative to the *resized* image, not whatever the caller uploaded, so the resized dimensions have to be returned to the caller for them to be usable at all.
+- The cookbook pins `transformers>=4.54.0,<4.57.0` — well above what the previous text-only model needed (4.47.1 was fine for that). `requirements-worker.txt` bumped accordingly, plus `torchvision`/`pillow` for image handling.
+
+**API surface change**: `/v1/chat/completions` now accepts OpenAI's standard vision message format — `content` as a list of `{"type": "text", ...}` / `{"type": "image_url", "image_url": {"url": "data:image/...;base64,..."}}` parts, not just a plain string. Deliberately restricted to base64 data URIs only, not arbitrary `http(s)` URLs — letting API callers make the worker fetch a caller-supplied URL server-side is a textbook SSRF vector, and every real computer-use agent already has the screenshot as bytes (there's nothing to host). `MAX_REQUEST_BODY_BYTES` raised from 1MB to 10MB accordingly (a single base64 screenshot can exceed 1MB on its own). The response gets a non-standard `images` field carrying each image's original/resized dimensions, since a client can't compute real screen coordinates from a predicted `(x, y)` without knowing what it's relative to.
+
+**Validated directly against a real T4 via `colab exec`, before touching the deployed Render service** — per the user's own suggestion, given how expensive it had proven to debug worker-side issues only after routing through the whole deployed HTTP stack:
+- Text-only path: loaded (140.3s, dominated by the ~8GB weight download) and answered "What is the capital of France?" correctly ("Paris") in 1.72s.
+- Vision path (same already-warm kernel, no reload): given a synthetic 800×600 screenshot with a red "Submit" button at pixel box `x=[600,750] y=[520,570]`, and prompted to localize it, the model returned `{"x": 651, "y": 537}` — inside the true button's bounding box — in 5.55s, with `resized_width/height: 812/588` correctly reported. This is a real accuracy check against a known ground truth, not just "the call didn't crash."
+
+No new deploy-time bugs were introduced by this change beyond what's already documented above — the git-fork `jupyter-kernel-client` fix, the `HOME`-relative auth fix, and the always-cleanup-after-failure fix are all orthogonal to which model is configured and needed no rework.
+
+---
+
 ## 9. Phase 1 validation (live run, not simulated)
 
 This machine already had a cached, working `colab auth` token from earlier work in this repo, so Phase 1 was run for real against the live CLI (v0.6.0) rather than left as an untested script — see `phase1_poc/run_poc.py`. Actual output from a real run on 2026-09-15:

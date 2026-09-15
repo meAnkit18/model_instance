@@ -46,6 +46,22 @@ def test_chat_completions_rejects_malformed_body(client):
     assert resp.status_code == 422
 
 
+def test_chat_completions_accepts_multimodal_content(client):
+    """OpenAI-vision-style content parts (docs/research.md section 12) must
+    pass FastAPI/pydantic validation -- FakeDriver.infer ignores the
+    request body, so this only exercises the schema, not real decoding."""
+    resp = client.post("/v1/chat/completions", json={
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "click the login button"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,aGVsbG8="}},
+            ],
+        }],
+    })
+    assert resp.status_code == 200
+
+
 def test_chat_completions_requires_api_key_when_configured(client):
     settings.api_key = "topsecret"
     try:

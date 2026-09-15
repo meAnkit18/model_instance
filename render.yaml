@@ -33,7 +33,7 @@ services:
       - key: WORKER_MODE
         value: colab
       - key: MODEL_ID
-        value: Qwen/Qwen2.5-1.5B-Instruct
+        value: Hcompany/Holo1.5-3B
       - key: MODEL_DTYPE
         value: bfloat16
       - key: MAX_MODEL_LEN
@@ -63,7 +63,7 @@ services:
       - key: MAX_CONCURRENT_REQUESTS
         value: "4"
       - key: MAX_REQUEST_BODY_BYTES
-        value: "1000000"
+        value: "10000000"
       - key: API_KEY
         sync: false   # set manually in the dashboard -- a real random secret
       - key: WORKER_REGISTRATION_SECRET

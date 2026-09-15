@@ -4,5 +4,13 @@
 # stock Colab image (verified live, docs/research.md section 9) and are
 # deliberately NOT re-pinned here to avoid clobbering the preinstalled
 # CUDA-matched build with a plain PyPI wheel.
-transformers==4.47.1
-accelerate==1.2.1
+#
+# Version floor comes from Hcompany/Holo1.5-3B's own published cookbook
+# (docs/research.md section 12) -- older transformers doesn't have
+# AutoModelForImageTextToText resolve to Qwen2_5_VLForConditionalGeneration
+# correctly, and this project's previous model (a plain text-only LM) had
+# no reason to need it.
+transformers>=4.54.0,<4.57.0
+accelerate>=1.2.0
+torchvision
+pillow

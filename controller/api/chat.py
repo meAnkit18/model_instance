@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -18,7 +19,14 @@ router = APIRouter()
 
 class ChatMessage(BaseModel):
     role: str
-    content: str
+    # OpenAI vision format: either a plain string, or a list of content
+    # parts -- {"type": "text", "text": ...} and {"type": "image_url",
+    # "image_url": {"url": "data:image/...;base64,..."}}. Only base64
+    # data URIs are accepted, not http(s) URLs -- see worker/inference.py.
+    # An agent sends a screenshot as an image_url part alongside its
+    # instruction text in the same message, same as any OpenAI-vision-
+    # compatible client library already knows how to build.
+    content: str | list[dict[str, Any]]
 
 
 class ChatCompletionRequest(BaseModel):
@@ -61,7 +69,7 @@ async def chat_completions(
 
     prompt_tokens = result.get("prompt_tokens", 0)
     completion_tokens = result.get("completion_tokens", 0)
-    return {
+    response = {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
         "object": "chat.completion",
         "created": int(time.time()),
@@ -77,3 +85,11 @@ async def chat_completions(
             "total_tokens": prompt_tokens + completion_tokens,
         },
     }
+    if "images" in result:
+        # Non-standard extension: the model's coordinate outputs (e.g. a
+        # click_absolute action) are relative to the RESIZED image, not
+        # whatever pixel dimensions the agent's screenshot actually was --
+        # it needs these to scale a predicted (x, y) back to real screen
+        # coordinates. See worker/inference.py's smart_resize step.
+        response["images"] = result["images"]
+    return response
