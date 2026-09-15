@@ -147,17 +147,21 @@ class WorkerManager:
                 self._error_at = time.time()
                 state_store.transition(WorkerState.ERROR, error_message=str(e)[:500])
 
+            # Best-effort teardown after EVERY failed attempt, including the
+            # last one -- not just before a retry. A second real bug found
+            # via live deployment testing (docs/research.md section 11):
+            # cleanup previously only ran between retries, so an attempt
+            # that failed on its final try left a partially-started GPU
+            # session running indefinitely, burning quota with nothing
+            # left to stop it (the session name is only resolvable by the
+            # same CLI-host process that created it, so it couldn't even
+            # be cleaned up from elsewhere after the fact).
+            try:
+                await asyncio.to_thread(self.driver.stop)
+            except Exception as cleanup_err:
+                log_event("startup_cleanup_failed", detail=str(cleanup_err)[:300])
+
             if attempt < settings.startup_max_retries:
-                # Best-effort teardown before retrying: a partially-started
-                # session (e.g. `colab new` succeeded but model load failed)
-                # would otherwise make the next `colab new -s <same name>`
-                # fail outright, as observed live during Phase 4 validation
-                # (docs/research.md section 9) -- burning an entire retry
-                # attempt without even reaching the model-load step.
-                try:
-                    await asyncio.to_thread(self.driver.stop)
-                except Exception as cleanup_err:
-                    log_event("startup_cleanup_failed", detail=str(cleanup_err)[:300])
                 await asyncio.sleep(settings.startup_retry_backoff_seconds)
                 state_store.transition(WorkerState.STARTING)
         return state_store.get()

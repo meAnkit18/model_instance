@@ -106,6 +106,12 @@ async def test_gpu_unavailable_retries_then_raises():
     # bounded retries, not infinite -- see .env STARTUP_MAX_RETRIES=2 in conftest
     from controller.config import settings
     assert driver.start_calls == settings.startup_max_retries
+    # Regression: a real bug found via live deployment testing
+    # (docs/research.md section 11) -- cleanup only ran BETWEEN retries,
+    # so the final exhausted attempt left a GPU session running
+    # indefinitely with nothing left to stop it. Every failed attempt,
+    # including the last, must be cleaned up.
+    assert driver.stop_calls == settings.startup_max_retries
 
 
 @pytest.mark.asyncio
